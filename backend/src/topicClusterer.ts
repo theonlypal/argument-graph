@@ -27,8 +27,11 @@ export async function recomputeTopics() {
     const sample = nodes[0];
     const label = sample.event.title || `${sample.event.sourceChannel} – last 24h`;
     const nodeCount = nodes.length;
-    const avgIntensity = nodes.reduce((sum, n) => sum + n.intensity, 0) / nodeCount;
-    const recentBoost = nodes.some((n) => n.event.createdAtSource > new Date(Date.now() - 60 * 60 * 1000)) ? 10 : 0;
+    const avgIntensity =
+      nodes.reduce((sum: number, n: typeof nodes[number]) => sum + n.intensity, 0) / nodeCount;
+    const recentBoost = nodes.some((n: typeof nodes[number]) => n.event.createdAtSource > new Date(Date.now() - 60 * 60 * 1000))
+      ? 10
+      : 0;
     const heat = nodeCount * 0.5 + avgIntensity * 50 + recentBoost;
 
     const existing = await prisma.topicCluster.findFirst({ where: { label } });
@@ -44,7 +47,7 @@ export async function recomputeTopics() {
       topicId = created.id;
     }
 
-    const nodeIds = nodes.map((n) => n.id);
+    const nodeIds = nodes.map((n: typeof nodes[number]) => n.id);
     await prisma.graphNode.updateMany({ where: { id: { in: nodeIds } }, data: { topicId } });
   }
 }

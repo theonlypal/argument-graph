@@ -1,9 +1,9 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { prisma } from '../prismaClient';
 
 const router = Router();
 
-router.get('/', async (_req, res) => {
+router.get('/', async (_req: Request, res: Response): Promise<void> => {
   try {
     const since = new Date(Date.now() - 12 * 60 * 60 * 1000);
     const nodes = await prisma.graphNode.findMany({
@@ -19,7 +19,7 @@ router.get('/', async (_req, res) => {
       take: 1500,
     });
 
-    const nodeDtos = nodes.map((node) => ({
+    const nodeDtos = nodes.map((node: typeof nodes[number]) => ({
       id: node.id,
       eventId: node.eventId,
       label: node.event.author
@@ -33,7 +33,7 @@ router.get('/', async (_req, res) => {
       url: node.event.url,
     }));
 
-    const edgeDtos = edges.map((edge) => ({
+    const edgeDtos = edges.map((edge: typeof edges[number]) => ({
       id: edge.id,
       source: edge.fromNodeId,
       target: edge.toNodeId,

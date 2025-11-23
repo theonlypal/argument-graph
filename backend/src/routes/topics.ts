@@ -1,9 +1,9 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { prisma } from '../prismaClient';
 
 const router = Router();
 
-router.get('/', async (_req, res) => {
+router.get('/', async (_req: Request, res: Response): Promise<void> => {
   try {
     const topics = await prisma.topicCluster.findMany({
       orderBy: { heatScore: 'desc' },
@@ -11,7 +11,7 @@ router.get('/', async (_req, res) => {
       take: 50,
     });
 
-    const summaries = topics.map((t) => ({
+    const summaries = topics.map((t: typeof topics[number]) => ({
       id: t.id,
       label: t.label,
       heatScore: t.heatScore,
@@ -25,7 +25,7 @@ router.get('/', async (_req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: Request, res: Response): Promise<void> => {
   const id = parseInt(req.params.id, 10);
   if (Number.isNaN(id)) {
     res.status(400).json({ error: 'Invalid topic id' });
@@ -45,7 +45,7 @@ router.get('/:id', async (req, res) => {
       return;
     }
 
-    const nodeIds = topic.nodes.map((n) => n.id);
+    const nodeIds = topic.nodes.map((n: typeof topic.nodes[number]) => n.id);
     const edges = await prisma.graphEdge.findMany({
       where: { OR: [{ fromNodeId: { in: nodeIds } }, { toNodeId: { in: nodeIds } }] },
     });
@@ -54,7 +54,7 @@ router.get('/:id', async (req, res) => {
       id: topic.id,
       label: topic.label,
       heatScore: topic.heatScore,
-      nodes: topic.nodes.map((n) => ({
+      nodes: topic.nodes.map((n: typeof topic.nodes[number]) => ({
         id: n.id,
         eventId: n.eventId,
         bodyText: n.event.bodyText,
@@ -63,7 +63,7 @@ router.get('/:id', async (req, res) => {
         intensity: n.intensity,
         url: n.event.url,
       })),
-      edges: edges.map((e) => ({
+      edges: edges.map((e: typeof edges[number]) => ({
         id: e.id,
         source: e.fromNodeId,
         target: e.toNodeId,
