@@ -1,0 +1,64 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model IngestedEvent {
+  id               Int       @id @default(autoincrement())
+  platform         String
+  sourceChannel    String
+  externalId       String    @unique
+  parentExternalId String?
+  url              String
+  author           String?
+  title            String?
+  bodyText         String
+  language         String?
+  createdAtSource  DateTime
+  ingestedAt       DateTime  @default(now())
+
+  graphNode        GraphNode?
+}
+
+model GraphNode {
+  id             Int           @id @default(autoincrement())
+  eventId        Int           @unique
+  event          IngestedEvent @relation(fields: [eventId], references: [id])
+
+  sentimentScore Float
+  intensity      Float
+  topicId        Int?
+  topic          TopicCluster? @relation(fields: [topicId], references: [id])
+
+  outgoingEdges  GraphEdge[]   @relation("OutgoingEdges")
+  incomingEdges  GraphEdge[]   @relation("IncomingEdges")
+
+  createdAt      DateTime      @default(now())
+}
+
+model GraphEdge {
+  id           Int        @id @default(autoincrement())
+  fromNodeId   Int
+  toNodeId     Int
+  fromNode     GraphNode  @relation("OutgoingEdges", fields: [fromNodeId], references: [id])
+  toNode       GraphNode  @relation("IncomingEdges", fields: [toNodeId], references: [id])
+
+  relationType String
+  confidence   Float
+
+  createdAt    DateTime   @default(now())
+}
+
+model TopicCluster {
+  id            Int          @id @default(autoincrement())
+  label         String
+  heatScore     Float
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  nodes         GraphNode[]
+}

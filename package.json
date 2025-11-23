@@ -1,0 +1,16 @@
+{
+  "name": "argument-graph",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": ["backend", "frontend"],
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "scripts": {
+    "dev:backend": "cd backend && pnpm dev",
+    "dev:frontend": "cd frontend && pnpm dev",
+    "dev": "concurrently \"pnpm dev:backend\" \"pnpm dev:frontend\"",
+    "backend:migrate": "cd backend && pnpm prisma migrate dev --name init",
+    "backend:generate": "cd backend && pnpm prisma generate"
+  }
+}
