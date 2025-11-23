@@ -1,96 +1,67 @@
 import axios from 'axios';
-import { prisma } from './prismaClient';
 import { config } from './config';
+import { prisma } from './prismaClient';
 
-let redditToken: { accessToken: string; expiresAt: number } | null = null;
-
-async function fetchToken() {
-  if (redditToken && redditToken.expiresAt > Date.now() + 60_000) {
-    return redditToken.accessToken;
-  }
-
-  const basicAuth = Buffer.from(`${config.redditClientId}:${config.redditClientSecret}`).toString('base64');
-
-  const params = new URLSearchParams();
-  params.append('grant_type', 'password');
-  params.append('username', config.redditUsername);
-  params.append('password', config.redditPassword);
-
-  const response = await axios.post('https://www.reddit.com/api/v1/access_token', params, {
-    headers: {
-      Authorization: `Basic ${basicAuth}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': config.redditUserAgent,
-    },
-  });
-
-  const data = response.data;
-  const expiresInMs = (data.expires_in || 3600) * 1000;
-  redditToken = {
-    accessToken: data.access_token,
-    expiresAt: Date.now() + expiresInMs,
-  };
-
-  return redditToken.accessToken;
-}
-
-export async function runRedditIngestion() {
-  try {
-    const token = await fetchToken();
-    for (const subreddit of config.subreddits) {
-      await ingestSubreddit(subreddit, token);
-    }
-  } catch (err) {
-    console.error('Reddit ingestion error', err);
-  }
-}
-
-async function ingestSubreddit(subreddit: string, token: string) {
-  const url = `https://oauth.reddit.com/r/${subreddit}/comments?limit=50&sort=new`;
-  const response = await axios.get(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'User-Agent': config.redditUserAgent,
-    },
-  });
-
-  const comments = response.data?.data?.children || [];
-  for (const child of comments) {
-    const c = child.data;
-    if (!c || !c.id || !c.body) continue;
-    const externalId = c.id;
-    const parentRaw: string | null = c.parent_id || null;
-    const parentExternalId = parentRaw ? parentRaw.replace(/^t[1-3]_/, '') : null;
-    const createdAt = new Date((c.created_utc || 0) * 1000);
-    const permalink = c.permalink ? `https://reddit.com${c.permalink}` : `https://reddit.com${c.id}`;
+async function runRedditIngestion(): Promise<void> {
+  for (const subreddit of config.subreddits) {
+    const url = `https://www.reddit.com/r/${subreddit}/comments.json?limit=50&sort=new`;
 
     try {
-      await prisma.ingestedEvent.upsert({
-        where: { externalId },
-        update: {
-          bodyText: c.body,
-          author: c.author || null,
-          title: c.link_title || null,
-          createdAtSource: createdAt,
-          parentExternalId,
-          url: permalink,
-          sourceChannel: subreddit,
-        },
-        create: {
-          platform: 'reddit',
-          sourceChannel: subreddit,
-          externalId,
-          parentExternalId,
-          url: permalink,
-          author: c.author || null,
-          title: c.link_title || null,
-          bodyText: c.body,
-          language: c.lang || null,
-          createdAtSource: createdAt,
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent': config.redditUserAgent,
         },
       });
-    } catch (err) {
-      console.error('Failed to upsert comment', externalId, err);
+
+      const children = response.data?.data?.children ?? [];
+
+      for (const child of children) {
+        const data = child?.data;
+        if (!data || !data.id) continue;
+
+        const bodyText: string | undefined = data.body ?? data.selftext;
+        if (!bodyText) continue;
+
+        const commentId: string = data.id;
+        const parentIdRaw: string | null = data.parent_id ?? null;
+        const parentExternalId = parentIdRaw ? parentIdRaw.replace(/^t[13]_/, '') : null;
+        const createdAtSource = typeof data.created_utc === 'number' ? new Date(data.created_utc * 1000) : new Date();
+        const permalink: string | undefined = data.permalink;
+        const title: string | undefined = data.link_title ?? data.title;
+
+        try {
+          await prisma.ingestedEvent.upsert({
+            where: { externalId: commentId },
+            update: {
+              parentExternalId,
+              url: permalink ? `https://reddit.com${permalink}` : '',
+              author: data.author ?? null,
+              title: title ?? null,
+              bodyText,
+              createdAtSource,
+              sourceChannel: subreddit,
+            },
+            create: {
+              platform: 'reddit',
+              sourceChannel: subreddit,
+              externalId: commentId,
+              parentExternalId,
+              url: permalink ? `https://reddit.com${permalink}` : '',
+              author: data.author ?? null,
+              title: title ?? null,
+              bodyText,
+              createdAtSource,
+            },
+          });
+        } catch (err) {
+          console.error(`Failed to upsert comment ${commentId} from r/${subreddit}:`, err);
+        }
+      }
+    } catch (err: any) {
+      const message = err?.message || 'Unknown error';
+      console.error(`Error fetching subreddit r/${subreddit}: ${message}`);
     }
   }
 }
+
+export { runRedditIngestion };
